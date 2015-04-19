@@ -54,14 +54,8 @@ public class DBConnection {
 	}
 	
 	public static void main(String[] args){
-		JSONObject jobj = new JSONObject();
-		try {
-			jobj.put("first", "1");
-			System.out.println(jobj);
-		} catch (JSONException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
+		Boolean b=true;
+		System.out.println(b.toString());
 		
 
 		/*Connection conn = null;
