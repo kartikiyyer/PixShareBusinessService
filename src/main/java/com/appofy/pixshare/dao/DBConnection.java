@@ -8,6 +8,7 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Iterator;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -54,9 +55,23 @@ public class DBConnection {
 	}
 	
 	public static void main(String[] args){
-		Boolean b=true;
-		System.out.println(b.toString());
-		
+		String str= "{\"picture\":{\"data\":{\"url\":\"gggg\",\"is_silhouette\":false}},\"id\":\"10206162193432848\",\"gender\":\"male\",\"email\":\"rohan.tan@gmail.com\"}";
+		try {
+			JSONObject jo = new JSONObject(str);
+			System.out.println(jo);
+			Iterator<?> keys = jo.keys();
+			while( keys.hasNext() ) {
+			    String key = (String)keys.next();
+			    System.out.println(key);
+			    if(key.contains("picture")){
+			    	System.out.println(jo.get("picture"));
+			    }
+			}			
+			
+		} catch (JSONException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 
 		/*Connection conn = null;
 		Statement stmt = null;
