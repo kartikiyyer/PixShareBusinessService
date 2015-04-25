@@ -10,6 +10,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Iterator;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -55,76 +56,14 @@ public class DBConnection {
 	}
 	
 	public static void main(String[] args){
-		String str= "{\"picture\":{\"data\":{\"url\":\"gggg\",\"is_silhouette\":false}},\"id\":\"10206162193432848\",\"gender\":\"male\",\"email\":\"rohan.tan@gmail.com\"}";
+		String str= "[\"rohan\",\"tan\"]";
 		try {
-			JSONObject jo = new JSONObject(str);
-			System.out.println(jo);
-			Iterator<?> keys = jo.keys();
-			while( keys.hasNext() ) {
-			    String key = (String)keys.next();
-			    System.out.println(key);
-			    if(key.contains("picture")){
-			    	System.out.println(jo.get("picture"));
-			    }
-			}			
-			
+			JSONArray ja = new JSONArray(str);
+			System.out.println(ja.get(1));
+												
 		} catch (JSONException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
-		}
-
-		/*Connection conn = null;
-		Statement stmt = null;
-		try{
-			//Register JDBC driver
-			Class.forName(JDBC_DRIVER);
-
-			//Open a connection
-			System.out.println("Connecting to database...");
-			conn = DriverManager.getConnection(DB_URL,USER,PASS);
-
-			//Execute a query
-			System.out.println("Creating statement...");
-			stmt = conn.createStatement();
-			String sql;
-			sql = "SELECT user_id FROM users";
-			ResultSet rs = stmt.executeQuery(sql);
-
-			//Extract data from result set
-			while(rs.next()){
-				//Retrieve by column name
-				int id  = rs.getInt("user_id");
-				
-				//Display values
-				System.out.print("ID: " + id);				
-			}
-			//Clean-up environment
-			rs.close();
-			stmt.close();
-			conn.close();
-		}catch(SQLException se){
-			//Handle errors for JDBC
-			se.printStackTrace();
-		}catch(Exception e){
-			//Handle errors for Class.forName
-			e.printStackTrace();
-		}finally{
-			//finally block used to close resources
-			try{
-				if(stmt!=null)
-					stmt.close();
-			}catch(SQLException se2){
-			}// nothing we can do
-			try{
-				if(conn!=null)
-					conn.close();
-			}catch(SQLException se){
-				se.printStackTrace();
-			}//end finally try
-		}//end try
-*/
-	
+		}	
 	}
-
-
 }

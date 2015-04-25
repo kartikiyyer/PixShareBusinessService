@@ -18,6 +18,7 @@ import javax.ws.rs.Path;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Response;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -118,113 +119,7 @@ public class PixShareServices {
 		System.out.println(jsonObject.toString());
 		return Response.status(200).entity(jsonObject.toString()).build();
 
-	}
-
-	/*@GET
-	@Path("authenticate")
-	public Response authenticateUser(@QueryParam("deviceId") String deviceId) {
-
-		String output = "Device Id : " + deviceId;
-		JSONObject jsonObject = new JSONObject();
-
-		System.out.println(deviceId);
-		PreparedStatement prepStmt = null;	
-		PreparedStatement prepStmt1 = null;
-		Connection conn=null;
-		ResultSet rs= null;
-		try{
-			DBConnection dbConnection =new DBConnection();
-			conn=dbConnection.getConnection();					
-			String query = "SELECT * FROM users where device_id = ?";
-			prepStmt = conn.prepareStatement(query);
-			prepStmt.setString(1, deviceId);
-			rs = prepStmt.executeQuery();			
-			//prepStmt.close();
-
-			if(!rs.isBeforeFirst() ){
-				//Not Found
-				jsonObject.put("userFound", "false");
-			}else{
-				int user_id=-1;
-				int session=-1;
-				while(rs.next()){				
-					user_id  = rs.getInt("user_id");				
-					System.out.print("User ID: " + user_id);
-					jsonObject.put("userFound", "true");
-					jsonObject.put("userId", rs.getString("user_id"));
-					jsonObject.put("firstName", rs.getString("first_name"));					
-				}
-				query= "select * from  social_media_logins where user_id = ?";
-				prepStmt.close();
-				prepStmt = conn.prepareStatement(query);
-				prepStmt.setInt(1, user_id);
-				rs = prepStmt.executeQuery();
-				//prepStmt.close();
-				if(rs.isBeforeFirst() ){					
-					while(rs.next()){				
-						session  = rs.getInt("session");				
-						System.out.print("Session: " + session);	
-						if(session==1){
-							jsonObject.put("sessionLogin", "true");
-							query= "select name from  social_media_sources where source_id = ?";
-							prepStmt1 = conn.prepareStatement(query);
-							prepStmt1.setInt(1, rs.getInt("source_id"));
-							ResultSet rs1 = prepStmt1.executeQuery();
-							//prepStmt.close();
-							while(rs1.next()){
-								jsonObject.put("socialMediaName", rs1.getString("name"));
-							}							
-							//send user to profile page
-						}
-						else if(session==0){
-							jsonObject.put("sessionLogin", "false");
-							//send user to login page
-						}
-					}				
-				}else{
-					//Not Found
-					query= "select * from  users where user_id = ?";
-					prepStmt = conn.prepareStatement(query);
-					prepStmt.setInt(1, user_id);
-					ResultSet rs2 = prepStmt.executeQuery();
-					prepStmt.close();
-					while(rs2.next()){
-						if(null!=rs2.getString("email")){
-							jsonObject.put("emailLogin", "true");
-							//send user to profile page
-						}else{
-							jsonObject.put("emailLogin", "false");
-							//send user to login page
-						}
-					}
-				}
-			}
-
-		}catch(SQLException se){
-			//Handle errors for JDBC
-			se.printStackTrace();
-		}catch(Exception e){
-			//Handle errors for Class.forName
-			e.printStackTrace();
-		}finally{
-			//finally block used to close resources
-			try{
-				if(prepStmt!=null)
-					prepStmt.close();
-				if(prepStmt1!=null)
-					prepStmt1.close();
-			}catch(SQLException se2){
-			}// nothing we can do
-			try{
-				if(conn!=null)
-					conn.close();
-			}catch(SQLException se){
-				se.printStackTrace();
-			}//end finally try
-		}
-		return Response.status(200).entity(jsonObject.toString()).build();
-
-	}*/
+	}	
 
 	@GET
 	@Path("checkAvailableUserName")
@@ -322,8 +217,9 @@ public class PixShareServices {
 	public Response registerUser(@FormParam("firstName") String firstName, @FormParam("lastName") String lastName, @FormParam("userName") String userName,
 			@FormParam("email") String email, @FormParam("password") String password){		
 
-		PreparedStatement prepStmt = null;			
+		PreparedStatement prepStmt = null, prepStmt1 = null, prepStmt2 = null, prepStmt3 = null;			
 		Connection conn=null;
+		int last_inserted_user_id=-1;
 		JSONObject jsonObject = new JSONObject();	
 		System.out.println("in register/email");
 		try{
@@ -331,9 +227,10 @@ public class PixShareServices {
 			jsonObject.put("responseFlag", "fail");
 
 			DBConnection dbConnection =new DBConnection();
-			conn=dbConnection.getConnection();					
+			conn=dbConnection.getConnection();			
+			conn.setAutoCommit(false);
 			String query = "INSERT INTO users(first_name,last_name,user_name,email,hash_password) VALUES (?,?,?,?,?)";
-			prepStmt = conn.prepareStatement(query);
+			prepStmt = conn.prepareStatement(query,Statement.RETURN_GENERATED_KEYS);
 			prepStmt.setString(1, firstName);
 			prepStmt.setString(2, lastName);
 			prepStmt.setString(3, userName);
@@ -346,7 +243,38 @@ public class PixShareServices {
 
 			prepStmt.setString(5, encryptedString);			
 			if(prepStmt.executeUpdate()==1){
+
+				ResultSet rs = prepStmt.getGeneratedKeys();
+				if(rs.next())
+				{
+					last_inserted_user_id = rs.getInt(1);
+					//					jsonObject.put("userId", last_inserted_user_id);
+				}
+				//add friend requests from the users who have sent invites
+				query = "SELECT user_id from email_invites where email = ?";
+				prepStmt1 = conn.prepareStatement(query);
+				prepStmt1.setString(1,email);
+				ResultSet rs1 = prepStmt1.executeQuery();
+				if(rs1.isBeforeFirst()){				
+					while(rs1.next()){
+						query = "INSERT INTO friends (user_id,friend_id,approved) VALUES (?,?,?)";
+						prepStmt2 = conn.prepareStatement(query);
+						prepStmt2.setInt(1,rs1.getInt("user_id"));
+						prepStmt2.setInt(2,last_inserted_user_id);						
+						prepStmt2.setInt(3,0); //0 for not approved
+						prepStmt2.executeUpdate();
+					}					
+				}else{
+					//no invites from any users
+				}
+				//now delete the records from email_invites table
+				query = "DELETE from email_invites where email = ?";
+				prepStmt3 = conn.prepareStatement(query);
+				prepStmt3.setString(1,email);
+				prepStmt3.executeUpdate();
+
 				jsonObject.put("responseFlag", "success");
+				conn.commit();						
 			}
 
 		}catch(SQLException se){
@@ -359,7 +287,13 @@ public class PixShareServices {
 			//finally block used to close resources
 			try{
 				if(prepStmt!=null)
-					prepStmt.close();				
+					prepStmt.close();	
+				if(prepStmt1!=null)
+					prepStmt1.close();	
+				if(prepStmt2!=null)
+					prepStmt2.close();
+				if(prepStmt3!=null)
+					prepStmt3.close();
 			}catch(SQLException se2){
 			}// nothing we can do
 			try{
@@ -390,40 +324,40 @@ public class PixShareServices {
 			//socialFieldsInJSONObj=socialFieldsInJSON.getJSONObject("socialDetails");
 			Iterator<?> keys = socialFieldsInJSONObj.keys();
 			while( keys.hasNext() ) {
-			    String key = (String)keys.next();
-			    System.out.println(key);
-			    if(key.contains("socialUserId")){
-			    	socialUserId = socialFieldsInJSONObj.getString("socialUserId");
-                }else if(key.contains("email")){
-                	email = socialFieldsInJSONObj.getString("email");
-                }else if(key.contains("userName")){
-                	userName = socialFieldsInJSONObj.getString("userName");
-                }else if(key.contains("gender")){
-                	gender = socialFieldsInJSONObj.getString("gender");
-                }else if(key.contains("profilePicURL")){                    
-                    profilePicURL = socialFieldsInJSONObj.getString("profilePicURL");
-                }else if(key.contains("phone")){
-                	phone = socialFieldsInJSONObj.getString("phone");
-                }else if(key.contains("website")){
-                	websiteURL = socialFieldsInJSONObj.getString("website");
-                }else if(key.contains("bio")){
-                	bio = socialFieldsInJSONObj.getString("bio");
-                }else if(key.contains("token")){
-                	password = socialFieldsInJSONObj.getString("token");
-                }else if(key.contains("sourceName")){
-                	sourceName = socialFieldsInJSONObj.getString("sourceName");
-                }else if(key.contains("firstName")){
-                	firstName = socialFieldsInJSONObj.getString("firstName");
-                }else if(key.contains("lastName")){
-                	lastName = socialFieldsInJSONObj.getString("lastName");
-                }
+				String key = (String)keys.next();
+				System.out.println(key);
+				if(key.contains("socialUserId")){
+					socialUserId = socialFieldsInJSONObj.getString("socialUserId");
+				}else if(key.contains("email")){
+					email = socialFieldsInJSONObj.getString("email");
+				}else if(key.contains("userName")){
+					userName = socialFieldsInJSONObj.getString("userName");
+				}else if(key.contains("gender")){
+					gender = socialFieldsInJSONObj.getString("gender");
+				}else if(key.contains("profilePicURL")){                    
+					profilePicURL = socialFieldsInJSONObj.getString("profilePicURL");
+				}else if(key.contains("phone")){
+					phone = socialFieldsInJSONObj.getString("phone");
+				}else if(key.contains("website")){
+					websiteURL = socialFieldsInJSONObj.getString("website");
+				}else if(key.contains("bio")){
+					bio = socialFieldsInJSONObj.getString("bio");
+				}else if(key.contains("token")){
+					password = socialFieldsInJSONObj.getString("token");
+				}else if(key.contains("sourceName")){
+					sourceName = socialFieldsInJSONObj.getString("sourceName");
+				}else if(key.contains("firstName")){
+					firstName = socialFieldsInJSONObj.getString("firstName");
+				}else if(key.contains("lastName")){
+					lastName = socialFieldsInJSONObj.getString("lastName");
+				}
 			}	
-			
+
 			System.out.println("in register/social with userName - "+userName);		
 			System.out.println("token: -->  "+password); //password is token
 			jsonObject.put("responseFlag", "fail"); //default to fail
 			jsonObject.put("socialMediaFlag", -1);
-			
+
 			DBConnection dbConnection =new DBConnection();
 			conn=dbConnection.getConnection();	
 			conn.setAutoCommit(false);
@@ -521,7 +455,7 @@ public class PixShareServices {
 			jsonObject.put("socialMediaId",-1);
 			jsonObject.put("userId",-1);
 			jsonObject.put("token",-1);
-			
+
 			DBConnection dbConnection =new DBConnection();
 			conn=dbConnection.getConnection();				
 			String query = "UPDATE social_media_logins SET token = ? WHERE social_user_id = ?";
@@ -532,7 +466,7 @@ public class PixShareServices {
 			if(prepStmt.executeUpdate()==1){   			
 				jsonObject.put("responseFlag", "success");
 			}
-			
+
 			query = "SELECT user_id,source_id,token from social_media_logins where social_user_id = ?";
 			prepStmt1 = conn.prepareStatement(query);
 			prepStmt1.setString(1, socialUserId);
@@ -543,7 +477,7 @@ public class PixShareServices {
 				jsonObject.put("userId",rs1.getInt("user_id"));
 				jsonObject.put("token",rs1.getString("token"));
 			}
-			
+
 
 		}catch(SQLException se){
 			//Handle errors for JDBC			
@@ -572,7 +506,7 @@ public class PixShareServices {
 	} 
 
 
-	/*@POST
+	@POST
 	@Consumes("application/x-www-form-urlencoded")
 	@Path("emailinvite")
 	public Response sendEmailInvite(@FormParam("userId") String userId, @FormParam("inviteeList") String inviteeList){		
@@ -580,57 +514,27 @@ public class PixShareServices {
 		PreparedStatement prepStmt = null;			
 		Connection conn=null;
 		JSONObject jsonObject = new JSONObject();	
-		JSONObject inviteeListJsonObj = new JSONObject(inviteeList);
-		
+
 		try{
+			JSONArray inviteeListJsonArray = new JSONArray(inviteeList);
 			System.out.println("in emailinvite with userId - "+userId);		
-			System.out.println("inviteeList: -->  "+inviteeListJsonObj);
-			
+			System.out.println("inviteeList: -->  "+inviteeListJsonArray);
+
 			jsonObject.put("responseFlag", "fail");
 
 			DBConnection dbConnection =new DBConnection();
 			conn=dbConnection.getConnection();	
 			conn.setAutoCommit(false);
-			String query = "INSERT INTO users(first_name,last_name,user_name,email,social_media_flag) VALUES (?,?,?,?,?)";
-			prepStmt = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
-			prepStmt.setString(1, firstName);
-			prepStmt.setString(2, lastName);
-			prepStmt.setString(3, userName);
-			prepStmt.setString(4, email);
-			prepStmt.setInt(5, 1);
 
-			if(prepStmt.executeUpdate()==1){				
-				ResultSet rs = prepStmt.getGeneratedKeys();
-				if(rs.next())
-				{
-					int last_inserted_user_id = rs.getInt(1);
-					jsonObject.put("user_id", last_inserted_user_id);
-				}
-				query = "SELECT source_id from social_media_sources where name = ?";
-				prepStmt.close();
-				prepStmt = conn.prepareStatement(query);
-				prepStmt.setString(1, sourceName);
-				ResultSet rs1=prepStmt.executeQuery();
-				while(rs1.next()){
-					jsonObject.put("sourceId", rs1.getInt("source_id"));
-				}
-				prepStmt.close();
-				//insert into social_media_logins
-
-				query = "INSERT INTO social_media_logins(user_id,source_id,token,social_user_id,session) VALUES (?,?,?,?,?)";
-				prepStmt = conn.prepareStatement(query);
-				prepStmt.setInt(1, jsonObject.getInt("user_id"));
-				prepStmt.setInt(2, jsonObject.getInt("sourceId"));
-				prepStmt.setString(3, password);
-				prepStmt.setString(4, socialUserId);
-				prepStmt.setInt(5, 1);    					
-				if(prepStmt.executeUpdate()==1){
-					conn.commit();
-					jsonObject.put("responseFlag", "success");
-				}
-
-				//
-			}
+			for(int i=0;i<inviteeListJsonArray.length();i++){
+				String query = "INSERT INTO email_invites(user_id,email) VALUES (?,?)";
+				prepStmt = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
+				prepStmt.setString(1, userId);
+				prepStmt.setString(2, inviteeListJsonArray.getString(i));
+				prepStmt.executeUpdate();				
+			}		
+			jsonObject.put("responseFlag", "success");
+			conn.commit();
 
 		}catch(SQLException se){
 			//Handle errors for JDBC
@@ -643,6 +547,9 @@ public class PixShareServices {
 				}
 			}
 			se.printStackTrace();
+		}catch(JSONException je){
+			//Handle errors for Class.forName
+			je.printStackTrace();
 		}catch(Exception e){
 			//Handle errors for Class.forName
 			e.printStackTrace();
@@ -663,90 +570,109 @@ public class PixShareServices {
 		System.out.println(jsonObject.toString());
 		return Response.status(200).entity(jsonObject.toString()).build();		
 	} 
-	*/
 
-	/*@POST
-	@Path("register")
-	public Response registerUser(@QueryParam("firstName") String firstName, @QueryParam("lastName") String lastName, @QueryParam("userName") String userName,
-			@QueryParam("email") String email, @QueryParam("password") String password){
+	@PUT
+	@Consumes("application/x-www-form-urlencoded")
+	@Path("acceptRejectFriendRequest")
+	public Response acceptRejectFriendRequest(@FormParam("userId") String userId, @FormParam("requesterUserId") String requesterUserId,@FormParam("acceptRejectFlag") String acceptRejectFlag){		
 
-		JSONObject jsonObject = new JSONObject();		
-		System.out.println(userName);
-
-		PreparedStatement prepStmt = null;	
-		PreparedStatement prepStmt1 = null;
+		PreparedStatement prepStmt = null;			
 		Connection conn=null;
-		ResultSet rs= null;
-
+		JSONObject jsonObject = new JSONObject();
 
 		try{
-			DBConnection dbConnection =new DBConnection();
-			conn=dbConnection.getConnection();					
-			String query = "SELECT * FROM users where device_id = ?";
-			prepStmt = conn.prepareStatement(query);
-			prepStmt.setString(1, deviceId);
-			rs = prepStmt.executeQuery();			
-			//prepStmt.close();
+			System.out.println("acceptRejectFriendRequest/social - userId : "+userId);				
+			jsonObject.put("responseFlag", "fail");
 
-			if(!rs.isBeforeFirst() ){
-				//Not Found
-				jsonObject.put("userFound", "false");
-			}else{
-				int user_id=-1;
-				int session=-1;
-				while(rs.next()){				
-					user_id  = rs.getInt("user_id");				
-					System.out.print("User ID: " + user_id);
-					jsonObject.put("userFound", "true");
-					jsonObject.put("userId", rs.getString("user_id"));
-					jsonObject.put("firstName", rs.getString("first_name"));					
-				}
-				query= "select * from  social_media_logins where user_id = ?";
-				prepStmt.close();
-				prepStmt = conn.prepareStatement(query);
-				prepStmt.setInt(1, user_id);
-				rs = prepStmt.executeQuery();
-				//prepStmt.close();
-				if(rs.isBeforeFirst() ){					
-					while(rs.next()){				
-						session  = rs.getInt("session");				
-						System.out.print("Session: " + session);	
-						if(session==1){
-							jsonObject.put("sessionLogin", "true");
-							query= "select name from  social_media_sources where source_id = ?";
-							prepStmt1 = conn.prepareStatement(query);
-							prepStmt1.setInt(1, rs.getInt("source_id"));
-							ResultSet rs1 = prepStmt1.executeQuery();
-							//prepStmt.close();
-							while(rs1.next()){
-								jsonObject.put("socialMediaName", rs1.getString("name"));
-							}							
-							//send user to profile page
-						}
-						else if(session==0){
-							jsonObject.put("sessionLogin", "false");
-							//send user to login page
-						}
-					}				
+			DBConnection dbConnection =new DBConnection();
+			conn=dbConnection.getConnection();	
+			conn.setAutoCommit(false);
+
+			if(acceptRejectFlag.equals("1")){
+				String query = "UPDATE friends SET approved = ? WHERE user_id = ? and friend_id = ?";
+				prepStmt = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
+				prepStmt.setInt(1, 1);			
+				prepStmt.setInt(2, Integer.parseInt(requesterUserId));	
+				prepStmt.setInt(3, Integer.parseInt(userId));					
+
+				if(prepStmt.executeUpdate()==1){   			
+					jsonObject.put("responseFlag", "success");
+					conn.commit();
 				}else{
-					//Not Found
-					query= "select * from  users where user_id = ?";
-					prepStmt = conn.prepareStatement(query);
-					prepStmt.setInt(1, user_id);
-					ResultSet rs2 = prepStmt.executeQuery();
-					prepStmt.close();
-					while(rs2.next()){
-						if(null!=rs2.getString("email")){
-							jsonObject.put("emailLogin", "true");
-							//send user to profile page
-						}else{
-							jsonObject.put("emailLogin", "false");
-							//send user to login page
-						}
-					}
+					//record not found
+				}
+
+			}else if(acceptRejectFlag.equals("0")){
+				String query = "DELETE from friends WHERE user_id = ? and friend_id = ?";
+				prepStmt = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
+				prepStmt.setInt(1, Integer.parseInt(requesterUserId));	
+				prepStmt.setInt(2, Integer.parseInt(userId));					
+
+
+				if(prepStmt.executeUpdate()==1){   			
+					jsonObject.put("responseFlag", "success");
+					conn.commit();
+				}else{
+					//record not found
 				}
 			}
 
+
+		}catch(SQLException se){
+			//Handle errors for JDBC			
+			se.printStackTrace();
+		}catch(Exception e){
+			//Handle errors for Class.forName
+			e.printStackTrace();
+		}finally{
+			//finally block used to close resources
+			try{
+				if(prepStmt!=null)
+					prepStmt.close();	
+			}catch(SQLException se2){
+			}// nothing we can do
+			try{
+				if(conn!=null)
+					conn.close();
+			}catch(SQLException se){
+				se.printStackTrace();
+			}//end finally try
+		}
+		System.out.println(jsonObject.toString());
+		return Response.status(200).entity(jsonObject.toString()).build();		
+	} 
+
+
+	@POST
+	@Consumes("application/x-www-form-urlencoded")
+	@Path("friendRequest")
+	public Response sendFriendRequest(@FormParam("userId") String userId, @FormParam("inviteeList") String inviteeList){		
+
+		PreparedStatement prepStmt = null;			
+		Connection conn=null;
+
+		JSONObject jsonObject = new JSONObject();	
+		System.out.println("in friendRequest");
+		try{
+			JSONArray inviteeListJsonArray = new JSONArray(inviteeList);
+			System.out.println("in friendRequest with userId - "+userId);		
+			System.out.println("inviteeList: -->  "+inviteeListJsonArray);
+
+			jsonObject.put("responseFlag", "fail");
+
+			DBConnection dbConnection =new DBConnection();
+			conn=dbConnection.getConnection();	
+			conn.setAutoCommit(false);
+
+			for(int i=0;i<inviteeListJsonArray.length();i++){
+				String query = "INSERT INTO friends(user_id,friend_id) VALUES (?,?)";
+				prepStmt = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
+				prepStmt.setString(1, userId);
+				prepStmt.setString(2, inviteeListJsonArray.getString(i));
+				prepStmt.executeUpdate();				
+			}		
+			jsonObject.put("responseFlag", "success");
+			conn.commit();
 		}catch(SQLException se){
 			//Handle errors for JDBC
 			se.printStackTrace();
@@ -757,9 +683,7 @@ public class PixShareServices {
 			//finally block used to close resources
 			try{
 				if(prepStmt!=null)
-					prepStmt.close();
-				if(prepStmt1!=null)
-					prepStmt1.close();
+					prepStmt.close();	
 			}catch(SQLException se2){
 			}// nothing we can do
 			try{
@@ -769,7 +693,135 @@ public class PixShareServices {
 				se.printStackTrace();
 			}//end finally try
 		}
+		System.out.println(jsonObject.toString());
 		return Response.status(200).entity(jsonObject.toString()).build();		
-	} */
+	}
+
+	@GET
+	@Consumes("application/x-www-form-urlencoded")
+	@Path("friendList")
+	public Response getFriendList(@QueryParam("userId") String userId){		
+
+		PreparedStatement prepStmt = null;			
+		Connection conn=null;
+		JSONObject jsonObject = new JSONObject();	
+		JSONObject jsonObject2;
+		JSONArray jsonArray = new JSONArray();
+		JSONArray jsonArray2 = new JSONArray();
+		System.out.println("in friendList");
+		try{
+			System.out.println("in friendList with userId - "+userId);		
+
+			jsonObject.put("responseFlag", "fail");
+
+			DBConnection dbConnection =new DBConnection();
+			conn=dbConnection.getConnection();	
+
+			String query = "SELECT friend_id FROM friends WHERE user_id = ? and approved=1";
+			prepStmt = conn.prepareStatement(query);
+			prepStmt.setString(1, userId);
+			ResultSet rs = prepStmt.executeQuery();
+			ResultSet rs1=null;
+			while(rs.next()){
+				int i=0;
+				jsonArray = new JSONArray();
+				jsonArray.put(i, rs.getInt("friend_id"));
+				query = "SELECT user_name,first_name,last_name,profile_pic_path FROM users WHERE user_id = ?";
+				prepStmt = conn.prepareStatement(query);
+				prepStmt.setInt(1, rs.getInt("friend_id"));
+				rs1 = prepStmt.executeQuery();
+				while(rs1.next()){
+					jsonArray.put(rs1.getString("user_name"));
+					jsonArray.put(rs1.getString("first_name"));
+					jsonArray.put(rs1.getString("last_name"));
+					jsonArray.put(rs1.getString("profile_pic_path"));
+				}
+				jsonObject2 = new JSONObject();
+				jsonObject2.put("friendDetails", jsonArray);
+				jsonArray2.put(jsonObject2);
+			}
+
+			jsonObject.put("responseFlag", "success");
+			jsonObject.put("friendList", jsonArray2);
+		}catch(SQLException se){
+			//Handle errors for JDBC
+			se.printStackTrace();
+		}catch(Exception e){
+			//Handle errors for Class.forName
+			e.printStackTrace();
+		}finally{
+			//finally block used to close resources
+			try{
+				if(prepStmt!=null)
+					prepStmt.close();	
+			}catch(SQLException se2){
+			}// nothing we can do
+			try{
+				if(conn!=null)
+					conn.close();
+			}catch(SQLException se){
+				se.printStackTrace();
+			}//end finally try
+		}
+		System.out.println(jsonObject.toString());
+		return Response.status(200).entity(jsonObject.toString()).build();		
+	}
+
+	@GET
+	@Consumes("application/x-www-form-urlencoded")
+	@Path("friendDetails")
+	public Response getFriendDetails(@QueryParam("friendId") String friendId){		
+
+		PreparedStatement prepStmt = null;			
+		Connection conn=null;
+		JSONObject jsonObject = new JSONObject();	
+		JSONArray jsonArray = new JSONArray();
+
+		System.out.println("in friendDetails");
+		try{
+			System.out.println("in friendDetails with friendId - "+friendId);		
+
+			jsonObject.put("responseFlag", "fail");
+
+			DBConnection dbConnection =new DBConnection();
+			conn=dbConnection.getConnection();	
+
+			String query = "SELECT user_name,first_name,last_name,profile_pic_path FROM users WHERE user_id = ?";
+			prepStmt = conn.prepareStatement(query);
+			prepStmt.setInt(1, Integer.parseInt(friendId));
+			ResultSet rs = prepStmt.executeQuery();
+			while(rs.next()){
+				jsonArray.put(friendId);
+				jsonArray.put(rs.getString("user_name"));
+				jsonArray.put(rs.getString("first_name"));
+				jsonArray.put(rs.getString("last_name"));
+				jsonArray.put(rs.getString("profile_pic_path"));
+			}
+			jsonObject.put("friendDetails", jsonArray);
+			jsonObject.put("responseFlag", "success");
+		}catch(SQLException se){
+			//Handle errors for JDBC
+			se.printStackTrace();
+		}catch(Exception e){
+			//Handle errors for Class.forName
+			e.printStackTrace();
+		}finally{
+			//finally block used to close resources
+			try{
+				if(prepStmt!=null)
+					prepStmt.close();	
+			}catch(SQLException se2){
+			}// nothing we can do
+			try{
+				if(conn!=null)
+					conn.close();
+			}catch(SQLException se){
+				se.printStackTrace();
+			}//end finally try
+		}
+		System.out.println(jsonObject.toString());
+		return Response.status(200).entity(jsonObject.toString()).build();		
+	}
+
 
 }
