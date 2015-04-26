@@ -4,12 +4,14 @@
 package com.appofy.pixshare;
 
 import java.security.MessageDigest;
+import java.security.acl.Owner;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
 import javax.ws.rs.Consumes;
+import javax.ws.rs.DELETE;
 import javax.ws.rs.FormParam;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
@@ -37,7 +39,7 @@ public class PixShareServices {
 
 
 	@GET
-	@Path("authenticate/email")
+	@Path("user/email/authenticate")
 	public Response authenticateUser(@QueryParam("userName") String userName, @QueryParam("password") String password) {
 
 		JSONObject jsonObject = new JSONObject();
@@ -122,7 +124,7 @@ public class PixShareServices {
 	}	
 
 	@GET
-	@Path("checkAvailableUserName")
+	@Path("user/email/availability")
 	public Response checkUserNameAvailability(@QueryParam("userName") String userName){
 		JSONObject jsonObject=new JSONObject();	
 		PreparedStatement prepStmt = null;
@@ -164,7 +166,7 @@ public class PixShareServices {
 	}
 
 	@GET
-	@Path("checkSocialUserIdPresent")
+	@Path("user/social/authenticate")
 	public Response checkSocialUserNamePresent(@QueryParam("socialUserId") String socialUserId, @QueryParam("token") String token){
 		JSONObject jsonObject=new JSONObject();	
 		PreparedStatement prepStmt = null;
@@ -213,7 +215,7 @@ public class PixShareServices {
 
 	@POST
 	@Consumes("application/x-www-form-urlencoded")
-	@Path("register/email")
+	@Path("user/email")
 	public Response registerUser(@FormParam("firstName") String firstName, @FormParam("lastName") String lastName, @FormParam("userName") String userName,
 			@FormParam("email") String email, @FormParam("password") String password){		
 
@@ -309,7 +311,7 @@ public class PixShareServices {
 
 	@POST
 	@Consumes("application/x-www-form-urlencoded")
-	@Path("register/social")
+	@Path("user/social")
 	public Response registerUserSocial(@FormParam("socialDetails") String socialDetails){		
 
 		PreparedStatement prepStmt = null;			
@@ -441,7 +443,7 @@ public class PixShareServices {
 
 	@PUT
 	@Consumes("application/x-www-form-urlencoded")
-	@Path("accesstoken/social")
+	@Path("user/social/accesstoken")
 	public Response updateAccessTokenSocial(@FormParam("socialUserId") String socialUserId, @FormParam("accessToken") String accessToken){		
 
 		PreparedStatement prepStmt = null, prepStmt1 = null;			
@@ -508,7 +510,7 @@ public class PixShareServices {
 
 	@POST
 	@Consumes("application/x-www-form-urlencoded")
-	@Path("emailinvite")
+	@Path("user/invite/email")
 	public Response sendEmailInvite(@FormParam("userId") String userId, @FormParam("inviteeList") String inviteeList){		
 
 		PreparedStatement prepStmt = null;			
@@ -573,7 +575,7 @@ public class PixShareServices {
 
 	@PUT
 	@Consumes("application/x-www-form-urlencoded")
-	@Path("acceptRejectFriendRequest")
+	@Path("user/friend")
 	public Response acceptRejectFriendRequest(@FormParam("userId") String userId, @FormParam("requesterUserId") String requesterUserId,@FormParam("acceptRejectFlag") String acceptRejectFlag){		
 
 		PreparedStatement prepStmt = null;			
@@ -645,7 +647,7 @@ public class PixShareServices {
 
 	@POST
 	@Consumes("application/x-www-form-urlencoded")
-	@Path("friendRequest")
+	@Path("user/friend")
 	public Response sendFriendRequest(@FormParam("userId") String userId, @FormParam("inviteeList") String inviteeList){		
 
 		PreparedStatement prepStmt = null;			
@@ -699,7 +701,7 @@ public class PixShareServices {
 
 	@GET
 	@Consumes("application/x-www-form-urlencoded")
-	@Path("friendList")
+	@Path("user/friend")
 	public Response getFriendList(@QueryParam("userId") String userId){		
 
 		PreparedStatement prepStmt = null;			
@@ -769,7 +771,7 @@ public class PixShareServices {
 
 	@GET
 	@Consumes("application/x-www-form-urlencoded")
-	@Path("friendDetails")
+	@Path("user/friend/detail")
 	public Response getFriendDetails(@QueryParam("friendId") String friendId){		
 
 		PreparedStatement prepStmt = null;			
@@ -822,6 +824,366 @@ public class PixShareServices {
 		System.out.println(jsonObject.toString());
 		return Response.status(200).entity(jsonObject.toString()).build();		
 	}
+	
+	@GET
+	@Consumes("application/x-www-form-urlencoded")
+	@Path("user")
+	public Response getUserByUserName(@QueryParam("userName") String userName){		
 
+		PreparedStatement prepStmt = null;			
+		Connection conn=null;
+		JSONObject jsonObject = new JSONObject();	
+		JSONArray jsonArray = new JSONArray();
+		JSONArray jsonArray1 = new JSONArray();
+
+		System.out.println("in findUserByUserName");
+		try{
+			System.out.println("in findUserByUserName with userName - "+userName);		
+
+			jsonObject.put("responseFlag", "fail");
+
+			DBConnection dbConnection =new DBConnection();
+			conn=dbConnection.getConnection();	
+
+			String query = "SELECT user_id,user_name,first_name,last_name,profile_pic_path FROM users WHERE user_name like ?";
+			prepStmt = conn.prepareStatement(query);
+			prepStmt.setString(1, userName+"%");
+			ResultSet rs = prepStmt.executeQuery();
+			while(rs.next()){
+				jsonArray = new JSONArray();
+				jsonArray.put(rs.getString("user_id"));
+				jsonArray.put(rs.getString("user_name"));
+				jsonArray.put(rs.getString("first_name"));
+				jsonArray.put(rs.getString("last_name"));
+				jsonArray.put(rs.getString("profile_pic_path"));
+				jsonArray1.put(jsonArray);
+			}
+			jsonObject.put("userListByUserName", jsonArray1);
+			jsonObject.put("responseFlag", "success");
+		}catch(SQLException se){
+			//Handle errors for JDBC
+			se.printStackTrace();
+		}catch(Exception e){
+			//Handle errors for Class.forName
+			e.printStackTrace();
+		}finally{
+			//finally block used to close resources
+			try{
+				if(prepStmt!=null)
+					prepStmt.close();	
+			}catch(SQLException se2){
+			}// nothing we can do
+			try{
+				if(conn!=null)
+					conn.close();
+			}catch(SQLException se){
+				se.printStackTrace();
+			}//end finally try
+		}
+		System.out.println(jsonObject.toString());
+		return Response.status(200).entity(jsonObject.toString()).build();		
+	}
+	
+	@POST
+	@Consumes("application/x-www-form-urlencoded")
+	@Path("group")
+	public Response createGroup(@FormParam("groupName") String groupName, @FormParam("groupMembersIdList") String groupMembersIdList,
+			@FormParam("groupOwnerUserId") String groupOwnerUserId){		
+
+		PreparedStatement prepStmt = null, prepStmt1 = null;			
+		Connection conn=null;
+		int last_inserted_group_id = -1;
+
+		JSONObject jsonObject = new JSONObject();	
+		System.out.println("in group");
+		try{
+			JSONArray groupMembersIdListJsonArray = new JSONArray(groupMembersIdList);
+			System.out.println("in group with groupOwnerUserId - "+groupOwnerUserId);		
+			System.out.println("groupMembersIdList: -->  "+groupMembersIdListJsonArray);
+
+			jsonObject.put("responseFlag", "fail");
+
+			DBConnection dbConnection =new DBConnection();
+			conn=dbConnection.getConnection();	
+			conn.setAutoCommit(false);
+			
+			String query = "INSERT INTO groups(group_name,group_owner_id) VALUES (?,?)";
+			prepStmt = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
+			prepStmt.setString(1, groupName);
+			prepStmt.setString(2, groupOwnerUserId);
+			if(prepStmt.executeUpdate()==1){
+				ResultSet rs = prepStmt.getGeneratedKeys();
+				if(rs.next())
+				{
+					last_inserted_group_id = rs.getInt(1);
+					
+					// insert groupId user_id in users_groups table for each member of the group 
+					for(int i=0;i<groupMembersIdListJsonArray.length();i++){
+						query = "INSERT INTO users_groups(group_id,user_id) VALUES (?,?)";
+						prepStmt1 = conn.prepareStatement(query);
+						prepStmt1.setInt(1, last_inserted_group_id);
+						prepStmt1.setInt(2, groupMembersIdListJsonArray.getInt(i));
+						prepStmt1.executeUpdate();				
+					}	
+					// insert group owner in users_groups table
+					query = "INSERT INTO users_groups(group_id,user_id) VALUES (?,?)";
+					prepStmt1 = conn.prepareStatement(query);
+					prepStmt1.setInt(1, last_inserted_group_id);
+					prepStmt1.setInt(2, Integer.parseInt(groupOwnerUserId));
+					prepStmt1.executeUpdate();	
+					
+					jsonObject.put("responseFlag", "success");
+					conn.commit();
+					
+				}
+			}
+
+			
+		}catch(SQLException se){
+			//Handle errors for JDBC
+			se.printStackTrace();
+		}catch(Exception e){
+			//Handle errors for Class.forName
+			e.printStackTrace();
+		}finally{
+			//finally block used to close resources
+			try{
+				if(prepStmt!=null)
+					prepStmt.close();	
+			}catch(SQLException se2){
+			}// nothing we can do
+			try{
+				if(conn!=null)
+					conn.close();
+			}catch(SQLException se){
+				se.printStackTrace();
+			}//end finally try
+		}
+		System.out.println(jsonObject.toString());
+		return Response.status(200).entity(jsonObject.toString()).build();		
+	}
+
+	@DELETE
+	@Consumes("application/x-www-form-urlencoded")
+	@Path("group")
+	public Response deleteGroup(@FormParam("userId") String userId, @FormParam("groupId") String groupId){		
+
+		PreparedStatement prepStmt = null, prepStmt1 = null, prepStmt2 = null;			
+		Connection conn=null;
+
+		JSONObject jsonObject = new JSONObject();	
+		System.out.println("in group");
+		try{
+			System.out.println("in delete group with userId - "+userId);		
+			System.out.println("groupId: -->  "+groupId);
+
+			jsonObject.put("responseFlag", "fail");
+
+			DBConnection dbConnection =new DBConnection();
+			conn=dbConnection.getConnection();	
+			conn.setAutoCommit(false);
+
+			String query = "SELECT group_owner_id from groups WHERE group_id = ?";
+			prepStmt = conn.prepareStatement(query);
+			prepStmt.setString(1, groupId);
+			ResultSet rs = prepStmt.executeQuery();
+			while(rs.next()){
+				if(rs.getInt("group_owner_id")==Integer.parseInt(userId)){
+					//delete records from users_groups
+					query = "DELETE from users_groups WHERE group_id = ?";
+					prepStmt1 = conn.prepareStatement(query);
+					prepStmt1.setString(1, groupId);
+					prepStmt1.executeUpdate();
+					
+					//delete the group
+					query = "DELETE from groups WHERE group_id = ? AND group_owner_id = ?";
+					prepStmt2 = conn.prepareStatement(query);
+					prepStmt2.setString(1, groupId);
+					prepStmt2.setString(2, userId);
+					prepStmt2.executeUpdate();
+				}
+				else{
+					jsonObject.put("message", "You are not the owner of the group");
+				}
+			}
+			
+			jsonObject.put("responseFlag", "success");
+			conn.commit();
+		}catch(SQLException se){
+			//Handle errors for JDBC
+			se.printStackTrace();
+		}catch(Exception e){
+			//Handle errors for Class.forName
+			e.printStackTrace();
+		}finally{
+			//finally block used to close resources
+			try{
+				if(prepStmt!=null)
+					prepStmt.close();	
+				if(prepStmt1!=null)
+					prepStmt1.close();	
+				if(prepStmt2!=null)
+					prepStmt2.close();	
+			}catch(SQLException se2){
+			}// nothing we can do
+			try{
+				if(conn!=null)
+					conn.close();
+			}catch(SQLException se){
+				se.printStackTrace();
+			}//end finally try
+		}
+		System.out.println(jsonObject.toString());
+		return Response.status(200).entity(jsonObject.toString()).build();		
+	}
+	
+	@GET
+	@Consumes("application/x-www-form-urlencoded")
+	@Path("group")
+	public Response getGroups(@QueryParam("userId") String userId){		
+
+		PreparedStatement prepStmt = null, prepStmt1 = null;			
+		Connection conn=null;
+		ResultSet rs1 = null;
+		JSONObject jsonObject = new JSONObject();	
+		JSONArray jsonArray = new JSONArray();
+		JSONArray jsonArray1 = new JSONArray();
+
+		System.out.println("in get groups");
+		try{
+			System.out.println("in get groups with userId - "+userId);		
+
+			jsonObject.put("responseFlag", "fail");
+
+			DBConnection dbConnection =new DBConnection();
+			conn=dbConnection.getConnection();	
+
+			String query = "SELECT group_id,user_id FROM users_groups WHERE user_id = ?";
+			prepStmt = conn.prepareStatement(query);
+			prepStmt.setInt(1, Integer.parseInt(userId));
+			ResultSet rs = prepStmt.executeQuery();
+			while(rs.next()){
+				jsonArray = new JSONArray();
+				jsonArray.put(rs.getString("group_id"));				
+				// get other group details from groups table
+				query = "SELECT group_name, group_owner_id FROM groups WHERE group_id = ?";
+				prepStmt1 = conn.prepareStatement(query);
+				prepStmt1.setInt(1, rs.getInt("group_id"));
+				rs1 = prepStmt1.executeQuery();
+				while(rs1.next()){
+					jsonArray.put(rs1.getString("group_name"));
+					jsonArray.put(rs1.getInt("group_owner_id"));
+				}
+				jsonArray1.put(jsonArray);
+			}
+			jsonObject.put("userGroups", jsonArray1);
+			jsonObject.put("responseFlag", "success");
+		}catch(SQLException se){
+			//Handle errors for JDBC
+			se.printStackTrace();
+		}catch(Exception e){
+			//Handle errors for Class.forName
+			e.printStackTrace();
+		}finally{
+			//finally block used to close resources
+			try{
+				if(prepStmt!=null)
+					prepStmt.close();	
+			}catch(SQLException se2){
+			}// nothing we can do
+			try{
+				if(conn!=null)
+					conn.close();
+			}catch(SQLException se){
+				se.printStackTrace();
+			}//end finally try
+		}
+		System.out.println(jsonObject.toString());
+		return Response.status(200).entity(jsonObject.toString()).build();		
+	}
+
+	@PUT
+	@Consumes("application/x-www-form-urlencoded")
+	@Path("group")
+	public Response updateGroup(@FormParam("userId") String userId, @FormParam("groupId") String groupId, 
+			@FormParam("updateFlag") String updateFlag, @FormParam("groupMembersIdList") String groupMembersIdList){		
+
+		PreparedStatement prepStmt = null;			
+		Connection conn=null;
+
+		JSONObject jsonObject = new JSONObject();	
+		System.out.println("in group update");
+		try{
+			System.out.println("in update group with userId - "+userId);		
+			System.out.println("groupId: -->  "+groupId);
+			
+			// add members -> updateFlag = 1, delete members -> updateFlag = 0
+			JSONArray groupMembersIdJsonArray = new JSONArray(groupMembersIdList);
+			jsonObject.put("responseFlag", "fail");
+
+			DBConnection dbConnection =new DBConnection();
+			conn=dbConnection.getConnection();	
+			conn.setAutoCommit(false);
+			
+			if(Integer.parseInt(updateFlag)==1){
+				//add members
+				// insert groupId user_id in users_groups table for each new member of the group 
+				for(int i=0;i<groupMembersIdJsonArray.length();i++){
+					String query = "INSERT INTO users_groups(group_id,user_id) VALUES (?,?)";
+					prepStmt = conn.prepareStatement(query);
+					prepStmt.setInt(1, Integer.parseInt(groupId));
+					prepStmt.setInt(2, groupMembersIdJsonArray.getInt(i));
+					prepStmt.executeUpdate();				
+				}	
+
+			}else if(Integer.parseInt(updateFlag)==0){
+				//delete members
+				//commented code is for restricting the deletion of members by group_owner only
+				/*String query = "SELECT group_owner_id from groups WHERE group_id = ?";
+				prepStmt = conn.prepareStatement(query);
+				prepStmt.setString(1, groupId);
+				ResultSet rs = prepStmt.executeQuery();
+				while(rs.next()){
+					if(rs.getInt("group_owner_id")==Integer.parseInt(userId)){*/
+						//delete records from users_groups
+						String query = "DELETE from users_groups WHERE user_id = ? and group_id = ?";
+						prepStmt = conn.prepareStatement(query);
+						for(int i=0;i<groupMembersIdJsonArray.length();i++){
+							prepStmt.setInt(1, Integer.parseInt(groupMembersIdJsonArray.getString(i)));
+							prepStmt.setInt(2, Integer.parseInt(groupId));
+							prepStmt.executeUpdate();
+						}						
+					/*}
+					else{
+						jsonObject.put("message", "You are not the owner of the group");
+					}
+				}*/
+			}
+			
+			jsonObject.put("responseFlag", "success");
+			conn.commit();
+		}catch(SQLException se){
+			//Handle errors for JDBC
+			se.printStackTrace();
+		}catch(Exception e){
+			//Handle errors for Class.forName
+			e.printStackTrace();
+		}finally{
+			//finally block used to close resources
+			try{
+				if(prepStmt!=null)
+					prepStmt.close();	
+			}catch(SQLException se2){
+			}// nothing we can do
+			try{
+				if(conn!=null)
+					conn.close();
+			}catch(SQLException se){
+				se.printStackTrace();
+			}//end finally try
+		}
+		System.out.println(jsonObject.toString());
+		return Response.status(200).entity(jsonObject.toString()).build();		
+	}
 
 }
