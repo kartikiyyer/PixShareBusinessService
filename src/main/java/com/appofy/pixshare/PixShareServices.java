@@ -4,7 +4,6 @@
 package com.appofy.pixshare;
 
 import java.security.MessageDigest;
-import java.security.acl.Owner;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -25,6 +24,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import com.appofy.pixshare.dao.DBConnection;
+import com.appofy.pixshare.util.EmailComposer;
 
 import java.sql.PreparedStatement;
 import java.util.Iterator;
@@ -513,27 +513,52 @@ public class PixShareServices {
 	@Path("user/invite/email")
 	public Response sendEmailInvite(@FormParam("userId") String userId, @FormParam("inviteeList") String inviteeList){		
 
-		PreparedStatement prepStmt = null;			
+		PreparedStatement prepStmt = null, prepStmt1 = null;			
 		Connection conn=null;
 		JSONObject jsonObject = new JSONObject();	
+		String emailSubject = "PixShare App Invitation";
+		String emailText = null;
 
 		try{
 			JSONArray inviteeListJsonArray = new JSONArray(inviteeList);
 			System.out.println("in emailinvite with userId - "+userId);		
 			System.out.println("inviteeList: -->  "+inviteeListJsonArray);
-
+			EmailComposer emailComposer = new EmailComposer();
+			
 			jsonObject.put("responseFlag", "fail");
 
 			DBConnection dbConnection =new DBConnection();
 			conn=dbConnection.getConnection();	
 			conn.setAutoCommit(false);
-
+			String query = null;
+			
+			//TODO link text is not working as expected, remove the bug!
+			String firstName = "",lastName = "";
+			String link = "<a href='http://abcd.efg.com' target='_blank'>here</a>";
+			
 			for(int i=0;i<inviteeListJsonArray.length();i++){
-				String query = "INSERT INTO email_invites(user_id,email) VALUES (?,?)";
+				query = "INSERT INTO email_invites(user_id,email) VALUES (?,?)";
 				prepStmt = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
 				prepStmt.setString(1, userId);
 				prepStmt.setString(2, inviteeListJsonArray.getString(i));
-				prepStmt.executeUpdate();				
+				prepStmt.executeUpdate();
+				
+				//get username from the users table
+				query = "SELECT first_name,last_name FROM users WHERE user_id = ?";
+				prepStmt1 = conn.prepareStatement(query);
+				prepStmt1.setString(1, userId);
+				ResultSet rs = prepStmt1.executeQuery();
+				while(rs.next()){
+					firstName = rs.getString("first_name");
+					lastName = rs.getString("last_name");
+				}
+				
+				//send email to the invitee
+				emailText= "Hi ! \n \n Your friend "+firstName+" "+lastName+" has invited you to join PixShare ! "
+						+ "\n PixShare is an App to share, preserve and cherish memories."
+						+ " It provides simple photos and album management and easy sharing. \n Download the Android App from "+link;
+				
+				emailComposer.sendEMail(inviteeListJsonArray.getString(i), emailSubject, emailText);
 			}		
 			jsonObject.put("responseFlag", "success");
 			conn.commit();
