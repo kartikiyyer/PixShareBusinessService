@@ -322,6 +322,8 @@ public class PixShareServices {
 
 		try{
 			//JSONObject socialFieldsInJSON = new JSONObject(socialDetails);
+			jsonObject.put("responseFlag", "fail"); //default to fail
+			System.out.println(socialDetails);
 			JSONObject socialFieldsInJSONObj = new JSONObject(socialDetails);
 			//socialFieldsInJSONObj=socialFieldsInJSON.getJSONObject("socialDetails");
 			Iterator<?> keys = socialFieldsInJSONObj.keys();
@@ -744,28 +746,37 @@ public class PixShareServices {
 			DBConnection dbConnection =new DBConnection();
 			conn=dbConnection.getConnection();	
 
-			String query = "SELECT friend_id FROM friends WHERE user_id = ? and approved=1";
+			String query = "SELECT friend_id,user_id FROM friends WHERE (user_id = ? OR friend_id = ?) AND approved = ?";
 			prepStmt = conn.prepareStatement(query);
 			prepStmt.setString(1, userId);
+			prepStmt.setString(2, userId);
+			prepStmt.setInt(3, 1);
 			ResultSet rs = prepStmt.executeQuery();
 			ResultSet rs1=null;
 			while(rs.next()){
 				int i=0;
 				jsonArray = new JSONArray();
-				jsonArray.put(i, rs.getInt("friend_id"));
-				query = "SELECT user_name,first_name,last_name,profile_pic_path FROM users WHERE user_id = ?";
-				prepStmt = conn.prepareStatement(query);
-				prepStmt.setInt(1, rs.getInt("friend_id"));
-				rs1 = prepStmt.executeQuery();
-				while(rs1.next()){
-					jsonArray.put(rs1.getString("user_name"));
-					jsonArray.put(rs1.getString("first_name"));
-					jsonArray.put(rs1.getString("last_name"));
-					jsonArray.put(rs1.getString("profile_pic_path"));
-				}
-				jsonObject2 = new JSONObject();
-				jsonObject2.put("friendDetails", jsonArray);
-				jsonArray2.put(jsonObject2);
+
+					
+					query = "SELECT user_name,first_name,last_name,profile_pic_path FROM users WHERE user_id = ?";
+					prepStmt = conn.prepareStatement(query);
+					if(rs.getInt("friend_id")==Integer.parseInt(userId)){
+						prepStmt.setInt(1, rs.getInt("user_id"));
+						jsonArray.put(i, rs.getInt("user_id"));
+					}else{
+						prepStmt.setInt(1, rs.getInt("friend_id"));
+						jsonArray.put(i, rs.getInt("friend_id"));
+					}				
+					rs1 = prepStmt.executeQuery();
+					while(rs1.next()){
+						jsonArray.put(rs1.getString("user_name"));
+						jsonArray.put(rs1.getString("first_name"));
+						jsonArray.put(rs1.getString("last_name"));
+						jsonArray.put(rs1.getString("profile_pic_path"));
+					}
+					jsonObject2 = new JSONObject();
+					jsonObject2.put("friendDetails", jsonArray);
+					jsonArray2.put(jsonObject2);
 			}
 
 			jsonObject.put("responseFlag", "success");
