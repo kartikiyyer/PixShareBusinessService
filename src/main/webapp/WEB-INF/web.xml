@@ -18,5 +18,10 @@
 		<servlet-name>jersey-serlvet</servlet-name>
 		<url-pattern>/rest/*</url-pattern>
 	</servlet-mapping>
+	
+	<servlet-mapping>
+    	<servlet-name>default</servlet-name>
+    	<url-pattern>/photos/*</url-pattern>
+	</servlet-mapping>
 
 </web-app>
