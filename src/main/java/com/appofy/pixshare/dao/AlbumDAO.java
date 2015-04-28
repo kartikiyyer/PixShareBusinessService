@@ -6,6 +6,11 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -259,6 +264,83 @@ public class AlbumDAO {
 				user.put("userName", rs.getString("user_name"));
 				users.put(user);
 			}
+			return true;
+		} catch(Exception e) {
+			e.printStackTrace();
+		} finally {
+			try {
+				rs.close();
+				prepStat.close();
+				conn.close();
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+		}
+		return false;
+	}
+	
+	public static boolean selectShareAlbumsForUser(int userId, JSONArray albums) { 
+		JSONObject album;
+		HashMap<Integer, String> albumsInfo = new HashMap<Integer, String>();
+		rs = null;
+		try {
+			conn = new DBConnection().getConnection();
+			String query = "select distinct(albums.album_id) AS album_id, albums.album_name from albums "
+					+ "INNER JOIN album_share_groups ON album_share_groups.album_id = albums.album_id "
+					+ "inner join users_groups on users_groups.group_id = album_share_groups.share_group_id "
+					+ "where users_groups.user_id = ?";
+			prepStat = conn.prepareStatement(query);
+			prepStat.setInt(1, userId);
+			rs = prepStat.executeQuery();
+			while(rs.next()) {
+				albumsInfo.put(rs.getInt("album_id"), rs.getString("album_name"));
+			}
+			
+			query = "select distinct(albums.album_id) AS album_id, albums.album_name from albums "
+					+ "INNER JOIN album_share_users ON album_share_users.album_id = albums.album_id "
+					+ "where album_share_users.share_user_id = ?";
+			
+			prepStat = conn.prepareStatement(query);
+			prepStat.setInt(1, userId);
+			rs = prepStat.executeQuery();
+			while(rs.next()) {
+				albumsInfo.put(rs.getInt("album_id"), rs.getString("album_name"));
+			}
+			
+			query = "select distinct(albums.album_id), albums.album_name FROM albums "
+					+ "INNER JOIN photos ON photos.album_id = albums.album_id "
+					+ "INNER JOIN photo_share_groups ON photo_share_groups.photo_id = photos.photo_id "
+					+ "inner join users_groups on users_groups.group_id = photo_share_groups.share_group_id "
+					+ "where users_groups.user_id = ?";
+			
+			prepStat = conn.prepareStatement(query);
+			prepStat.setInt(1, userId);
+			rs = prepStat.executeQuery();
+			while(rs.next()) {
+				albumsInfo.put(rs.getInt("album_id"), rs.getString("album_name"));
+			}
+			
+			query = "select distinct(albums.album_id), albums.album_name FROM albums "
+					+ "INNER JOIN photos on photos.album_id = albums.album_id "
+					+ "INNER JOIN photo_share_users ON photo_share_users.photo_id = photos.photo_id "
+					+ "where photo_share_users.user_id = ?";
+			
+			prepStat = conn.prepareStatement(query);
+			prepStat.setInt(1, userId);
+			rs = prepStat.executeQuery();
+			while(rs.next()) {
+				albumsInfo.put(rs.getInt("album_id"), rs.getString("album_name"));
+			}
+			
+			Iterator<Entry<Integer, String>> it = albumsInfo.entrySet().iterator();
+		    while (it.hasNext()) {
+		        Map.Entry<Integer, String> pair = (Map.Entry<Integer, String>)it.next();
+		        album = new JSONObject();
+		        album.put("albumId", pair.getKey());
+		        album.put("albumName", pair.getValue());
+		        albums.put(album);
+		    }			
+			
 			return true;
 		} catch(Exception e) {
 			e.printStackTrace();

@@ -6,6 +6,10 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Map.Entry;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -269,6 +273,83 @@ public class PhotoDAO {
 				user.put("userName", rs.getString("user_name"));
 				users.put(user);
 			}
+			return true;
+		} catch(Exception e) {
+			e.printStackTrace();
+		} finally {
+			try {
+				rs.close();
+				prepStat.close();
+				conn.close();
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+		}
+		return false;
+	}
+	
+	public static boolean selectSharePhotosForUser(int userId, int albumId, JSONArray photos) { 
+		JSONObject photo;
+		rs = null;
+		try {
+			conn = new DBConnection().getConnection();
+			String query = "select album_share_groups.album_id FROM album_share_groups "
+					+ "inner join users_groups on users_groups.group_id = album_share_groups.share_group_id "
+					+ "where users_groups.user_id = ? AND album_share_groups.album_id = ?";
+			prepStat = conn.prepareStatement(query);
+			prepStat.setInt(1, userId);
+			prepStat.setInt(2, albumId);
+			rs = prepStat.executeQuery();
+			if(rs.next()) {
+				return selectPhotos(albumId, photos);
+			}
+			
+			query = "select album_id FROM album_share_users where share_user_id = ? AND album_id = ?";
+			
+			prepStat = conn.prepareStatement(query);
+			prepStat.setInt(1, userId);
+			prepStat.setInt(2, albumId);
+			rs = prepStat.executeQuery();
+			if(rs.next()) {
+				return selectPhotos(albumId, photos);
+			}
+			
+			query = "select distinct(photos.photo_id) AS photo_id, photos.image_path from photos "
+					+ "INNER JOIN photo_share_groups ON photo_share_groups.photo_id = photos.photo_id "
+					+ "inner join users_groups on users_groups.group_id = photo_share_groups.share_group_id "
+					+ "where users_groups.user_id = ? and photos.album_id = ?";
+			
+			prepStat = conn.prepareStatement(query);
+			prepStat.setInt(1, userId);
+			prepStat.setInt(2, albumId);
+			rs = prepStat.executeQuery();
+			if(rs.next()) {
+				do {
+					photo = new JSONObject();
+					photo.put("photoId", rs.getInt("photo_id"));
+					photo.put("imagePath", rs.getString("image_path"));
+					photos.put(photo);
+				} while(rs.next());
+				return true;
+			}
+			
+			query = "select distinct(photos.photo_id) AS photo_id, photos.image_path from photos "
+					+ "INNER JOIN photo_share_users ON photo_share_users.photo_id = photos.photo_id "
+					+ "where photo_share_users.user_id = ? and photos.album_id = ?";
+			
+			prepStat = conn.prepareStatement(query);
+			prepStat.setInt(1, userId);
+			prepStat.setInt(2, albumId);
+			rs = prepStat.executeQuery();
+			if(rs.next()) {
+				do {
+					photo = new JSONObject();
+					photo.put("photoId", rs.getInt("photo_id"));
+					photo.put("imagePath", rs.getString("image_path"));
+					photos.put(photo);
+				} while(rs.next());
+			}
+			
 			return true;
 		} catch(Exception e) {
 			e.printStackTrace();

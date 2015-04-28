@@ -694,6 +694,49 @@ public class PhotoService {
 		return Response.status(200).entity(usersJSON.toString()).build();
 	}
 	
+	@Path("/user/albums")
+	@GET
+	public Response getShareAlbumsForUser(@QueryParam("userId") int userId) {
+		JSONObject albumsJSON = new JSONObject();
+		JSONArray albums = new JSONArray();
+		boolean daoSuccess = false;
+		try {
+			albumsJSON.put("userId", userId);
+			albumsJSON.put("responseFlag", "fail");
+			
+			daoSuccess = AlbumDAO.selectShareAlbumsForUser(userId, albums);
+			if(daoSuccess) {
+				albumsJSON.put("albums", albums);
+				albumsJSON.put("responseFlag", "success");
+			}
+		} catch (JSONException e) {
+			e.printStackTrace();
+		}
+		return Response.status(200).entity(albumsJSON.toString()).build();
+	}
+	
+	
+	@Path("/user/album/photos")
+	@GET
+	public Response getSharePhotosForUser(@QueryParam("userId") int userId, @QueryParam("albumId") int albumId) {
+		JSONObject photosJSON = new JSONObject();
+		JSONArray photos = new JSONArray();
+		boolean daoSuccess = false;
+		try {
+			photosJSON.put("userId", userId);
+			photosJSON.put("responseFlag", "fail");
+			
+			daoSuccess = PhotoDAO.selectSharePhotosForUser(userId, albumId, photos);
+			if(daoSuccess) {
+				photosJSON.put("photos", photos);
+				photosJSON.put("responseFlag", "success");
+			}
+		} catch (JSONException e) {
+			e.printStackTrace();
+		}
+		return Response.status(200).entity(photosJSON.toString()).build();
+	}
+	
 	private static boolean copyFileUsingFileStreams(File source, File dest) throws IOException {
 	    InputStream input = null;
 	    OutputStream output = null;
