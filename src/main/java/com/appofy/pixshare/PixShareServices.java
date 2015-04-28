@@ -770,8 +770,7 @@ public class PixShareServices {
 					rs1 = prepStmt.executeQuery();
 					while(rs1.next()){
 						jsonArray.put(rs1.getString("user_name"));
-						jsonArray.put(rs1.getString("first_name"));
-						jsonArray.put(rs1.getString("last_name"));
+						jsonArray.put(rs1.getString("first_name")+" "+rs1.getString("last_name"));
 						jsonArray.put(rs1.getString("profile_pic_path"));
 					}
 					jsonObject2 = new JSONObject();
@@ -860,6 +859,72 @@ public class PixShareServices {
 		System.out.println(jsonObject.toString());
 		return Response.status(200).entity(jsonObject.toString()).build();		
 	}
+	
+	@GET
+	@Consumes("application/x-www-form-urlencoded")
+	@Path("user/profile")
+	public Response getUserDetails(@QueryParam("userId") String userId){		
+
+		PreparedStatement prepStmt = null;			
+		Connection conn=null;
+		JSONObject jsonObject = new JSONObject();	
+		JSONArray jsonArray = new JSONArray();
+
+		System.out.println("in userDetails");
+		try{
+			System.out.println("in userDetails with userId - "+userId);		
+
+			jsonObject.put("responseFlag", "fail");
+
+			DBConnection dbConnection =new DBConnection();
+			conn=dbConnection.getConnection();	
+
+			String query = "SELECT first_name,last_name,user_name,profile_pic_path,bio,website_url,email, "
+						+"(SELECT name from social_media_sources sms,social_media_logins sml "
+						+ "where sml.user_id = ? and sml.source_id = sms.source_id) as logged_in_using, phone_number, gender "
+						+ "FROM pixshare.users WHERE user_id = ?";
+			prepStmt = conn.prepareStatement(query);
+			prepStmt.setInt(1, Integer.parseInt(userId));
+			prepStmt.setInt(2, Integer.parseInt(userId));
+			ResultSet rs = prepStmt.executeQuery();
+			while(rs.next()){
+				jsonArray.put(userId);
+				jsonArray.put(rs.getString("profile_pic_path"));
+				jsonArray.put(rs.getString("user_name"));
+				jsonArray.put(rs.getString("first_name")+" "+rs.getString("last_name"));	
+				jsonArray.put(rs.getString("website_url"));
+				jsonArray.put(rs.getString("bio"));		
+				jsonArray.put(rs.getString("logged_in_using"));	
+				jsonArray.put(rs.getString("email"));	
+				jsonArray.put(rs.getString("phone_number"));
+				jsonArray.put(rs.getString("gender"));							
+			}
+			jsonObject.put("userDetails", jsonArray);
+			jsonObject.put("responseFlag", "success");
+		}catch(SQLException se){
+			//Handle errors for JDBC
+			se.printStackTrace();
+		}catch(Exception e){
+			//Handle errors for Class.forName
+			e.printStackTrace();
+		}finally{
+			//finally block used to close resources
+			try{
+				if(prepStmt!=null)
+					prepStmt.close();	
+			}catch(SQLException se2){
+			}// nothing we can do
+			try{
+				if(conn!=null)
+					conn.close();
+			}catch(SQLException se){
+				se.printStackTrace();
+			}//end finally try
+		}
+		System.out.println(jsonObject.toString());
+		return Response.status(200).entity(jsonObject.toString()).build();		
+	}
+	
 	
 	@GET
 	@Consumes("application/x-www-form-urlencoded")
