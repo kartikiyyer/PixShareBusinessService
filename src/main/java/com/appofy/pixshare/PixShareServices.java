@@ -814,27 +814,36 @@ public class PixShareServices {
 		JSONObject jsonObject = new JSONObject();	
 		JSONArray jsonArray = new JSONArray();
 
-		System.out.println("in friendDetails");
+		System.out.println("in getFriendDetails");
 		try{
-			System.out.println("in friendDetails with friendId - "+friendId);		
+			System.out.println("in getFriendDetails with friendId - "+friendId);		
 
 			jsonObject.put("responseFlag", "fail");
 
 			DBConnection dbConnection =new DBConnection();
 			conn=dbConnection.getConnection();	
 
-			String query = "SELECT user_name,first_name,last_name,profile_pic_path FROM users WHERE user_id = ?";
+			String query = "SELECT first_name,last_name,user_name,profile_pic_path,bio,website_url,email, "
+						+"(SELECT name from social_media_sources sms,social_media_logins sml "
+						+ "where sml.user_id = ? and sml.source_id = sms.source_id) as logged_in_using, phone_number, gender "
+						+ "FROM pixshare.users WHERE user_id = ?";
 			prepStmt = conn.prepareStatement(query);
 			prepStmt.setInt(1, Integer.parseInt(friendId));
+			prepStmt.setInt(2, Integer.parseInt(friendId));
 			ResultSet rs = prepStmt.executeQuery();
 			while(rs.next()){
 				jsonArray.put(friendId);
-				jsonArray.put(rs.getString("user_name"));
-				jsonArray.put(rs.getString("first_name"));
-				jsonArray.put(rs.getString("last_name"));
 				jsonArray.put(rs.getString("profile_pic_path"));
+				jsonArray.put(rs.getString("user_name"));
+				jsonArray.put(rs.getString("first_name")+" "+rs.getString("last_name"));	
+				jsonArray.put(rs.getString("website_url"));
+				jsonArray.put(rs.getString("bio"));		
+				jsonArray.put(rs.getString("logged_in_using"));	
+				jsonArray.put(rs.getString("email"));	
+				jsonArray.put(rs.getString("phone_number"));
+				jsonArray.put(rs.getString("gender"));							
 			}
-			jsonObject.put("friendDetails", jsonArray);
+			jsonObject.put("userDetails", jsonArray);
 			jsonObject.put("responseFlag", "success");
 		}catch(SQLException se){
 			//Handle errors for JDBC
@@ -1263,6 +1272,65 @@ public class PixShareServices {
 			
 			jsonObject.put("responseFlag", "success");
 			conn.commit();
+		}catch(SQLException se){
+			//Handle errors for JDBC
+			se.printStackTrace();
+		}catch(Exception e){
+			//Handle errors for Class.forName
+			e.printStackTrace();
+		}finally{
+			//finally block used to close resources
+			try{
+				if(prepStmt!=null)
+					prepStmt.close();	
+			}catch(SQLException se2){
+			}// nothing we can do
+			try{
+				if(conn!=null)
+					conn.close();
+			}catch(SQLException se){
+				se.printStackTrace();
+			}//end finally try
+		}
+		System.out.println(jsonObject.toString());
+		return Response.status(200).entity(jsonObject.toString()).build();		
+	}
+	
+	@GET
+	@Consumes("application/x-www-form-urlencoded")
+	@Path("group/members")
+	public Response getGroupMembers(@QueryParam("groupId") String groupId){		
+
+		PreparedStatement prepStmt = null;			
+		Connection conn=null;
+		JSONObject jsonObject = new JSONObject();	
+		JSONArray jsonArray = new JSONArray();
+		JSONArray jsonArray1 = new JSONArray();
+
+		System.out.println("in getGroupMembers");
+		try{
+			System.out.println("in getGroupMembers with groupId - "+groupId);		
+
+			jsonObject.put("responseFlag", "fail");
+
+			DBConnection dbConnection =new DBConnection();
+			conn=dbConnection.getConnection();	
+
+			String query = "SELECT ug.group_id,u.user_id, first_name,last_name, profile_pic_path from users_groups ug, users u "
+					+ "WHERE u.user_id = ug.user_id AND group_id = ?";
+			prepStmt = conn.prepareStatement(query);
+			prepStmt.setInt(1, Integer.parseInt(groupId));
+			ResultSet rs = prepStmt.executeQuery();
+			while(rs.next()){
+				jsonArray = new JSONArray();
+				jsonArray.put(rs.getString("group_id"));
+				jsonArray.put(rs.getString("user_id"));
+				jsonArray.put(rs.getString("first_name")+" "+rs.getString("last_name"));
+				jsonArray.put(rs.getInt("profile_pic_path"));
+				jsonArray1.put(jsonArray);
+			}
+			jsonObject.put("userGroupMembers", jsonArray1);
+			jsonObject.put("responseFlag", "success");
 		}catch(SQLException se){
 			//Handle errors for JDBC
 			se.printStackTrace();
