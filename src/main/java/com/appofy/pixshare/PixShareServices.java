@@ -321,22 +321,20 @@ public class PixShareServices {
 		return Response.status(200).entity(jsonObject.toString()).build();		
 	} 
 	
+	
 	@PUT
 	@Consumes(MediaType.MULTIPART_FORM_DATA)
-	@Path("user")
-	public Response updateUser(@FormDataParam("userId") String userId,@FormDataParam("firstName") String firstName, 
-			@FormDataParam("lastName") String lastName,	@FormDataParam("email") String email, 
-			@FormDataParam("website") String website, @FormDataParam("bio") String bio,
-			@FormDataParam("gender") String gender, @FormDataParam("phone") String phone,
-			@FormDataParam("file") File photoObject,@FormDataParam("file") FormDataContentDisposition contentDispositionHeader){		
-
+	@Path("user/profilePic")
+	public Response updateUserProfilePic(@FormDataParam("userId") String userId,@FormDataParam("file") File photoObject,
+			@FormDataParam("file") FormDataContentDisposition contentDispositionHeader){
 		PreparedStatement prepStmt = null;			
 		Connection conn=null;
-		
 		String imagePath = new String();
+		
 		JSONObject jsonObject = new JSONObject();	
 		System.out.println("in userupdate");
 		System.out.println("in user update userName - "+userId);
+		
 		try{
 			AWSS3BucketHandling awss3BucketHandling=new AWSS3BucketHandling();
 			imagePath =awss3BucketHandling.addS3BucketObjects(photoObject, contentDispositionHeader);
@@ -346,14 +344,67 @@ public class PixShareServices {
 			}else{
 				jsonObject.put("message", "Image upload failed, try again later!");
 			}
-						
+			jsonObject.put("responseFlag", "fail");
+
+			DBConnection dbConnection =new DBConnection();
+			conn=dbConnection.getConnection();			
+			conn.setAutoCommit(false);
+			String query = "UPDATE users SET profile_pic_path=? WHERE user_id = ?";
+			prepStmt = conn.prepareStatement(query);
+			prepStmt.setString(1, imagePath);
+			prepStmt.setString(2, userId);
+			
+			if(prepStmt.executeUpdate()==1){
+				jsonObject.put("responseFlag", "success");
+				conn.commit();						
+			}
+			
+		}catch(SQLException se){
+			//Handle errors for JDBC
+			se.printStackTrace();
+		}catch(Exception e){
+			//Handle errors for Class.forName
+			e.printStackTrace();
+		}finally{
+			//finally block used to close resources
+			try{
+				if(prepStmt!=null)
+					prepStmt.close();	
+			}catch(SQLException se2){
+			}// nothing we can do
+			try{
+				if(conn!=null)
+					conn.close();
+			}catch(SQLException se){
+				se.printStackTrace();
+			}//end finally try
+		}
+		
+		System.out.println(jsonObject.toString());
+		return Response.status(200).entity(jsonObject.toString()).build();		
+	}
+	
+	@PUT
+	@Path("user")
+	public Response updateUser(@FormParam("userId") String userId,@FormParam("firstName") String firstName, 
+			@FormParam("lastName") String lastName,	@FormParam("email") String email, 
+			@FormParam("website") String website, @FormParam("bio") String bio,
+			@FormParam("gender") String gender, @FormParam("phone") String phone){		
+
+		PreparedStatement prepStmt = null;			
+		Connection conn=null;
+		
+		JSONObject jsonObject = new JSONObject();	
+		System.out.println("in userupdate");
+		System.out.println("in user update userId - "+userId);
+		try{
 			jsonObject.put("responseFlag", "fail");
 
 			DBConnection dbConnection =new DBConnection();
 			conn=dbConnection.getConnection();			
 			conn.setAutoCommit(false);
 			String query = "UPDATE users SET first_name=?,last_name=?,email=?,bio=?,"
-					+ "website_url=?,gender=?,phone_number=?,profile_pic_path=? WHERE user_id = ?;";
+					+ "website_url=?,gender=?,phone_number=? WHERE user_id = ?";
 			prepStmt = conn.prepareStatement(query);
 			prepStmt.setString(1, firstName);
 			prepStmt.setString(2, lastName);
@@ -361,9 +412,8 @@ public class PixShareServices {
 			prepStmt.setString(4, bio);
 			prepStmt.setString(5, website);
 			prepStmt.setString(6, gender);
-			prepStmt.setString(7, phone);
-			prepStmt.setString(8, imagePath);
-			prepStmt.setString(9, userId);
+			prepStmt.setString(7, phone);			
+			prepStmt.setString(8, userId);
 			
 			if(prepStmt.executeUpdate()==1){
 				jsonObject.put("responseFlag", "success");
