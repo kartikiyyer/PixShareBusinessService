@@ -3,12 +3,20 @@
  */
 package com.appofy.pixshare;
 
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.security.MessageDigest;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
+import javax.imageio.ImageIO;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.FormParam;
@@ -17,6 +25,7 @@ import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.QueryParam;
+import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
 import org.json.JSONArray;
@@ -24,7 +33,10 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import com.appofy.pixshare.dao.DBConnection;
+import com.appofy.pixshare.dao.PhotoDAO;
 import com.appofy.pixshare.util.EmailComposer;
+import com.sun.jersey.core.header.FormDataContentDisposition;
+import com.sun.jersey.multipart.FormDataParam;
 
 import java.sql.PreparedStatement;
 import java.util.Iterator;
@@ -308,7 +320,80 @@ public class PixShareServices {
 		System.out.println(jsonObject.toString());
 		return Response.status(200).entity(jsonObject.toString()).build();		
 	} 
+	
+	@PUT
+	@Consumes(MediaType.MULTIPART_FORM_DATA)
+	@Path("user")
+	public Response updateUser(@FormDataParam("userId") String userId,@FormDataParam("firstName") String firstName, 
+			@FormDataParam("lastName") String lastName,	@FormDataParam("email") String email, 
+			@FormDataParam("website") String website, @FormDataParam("bio") String bio,
+			@FormDataParam("gender") String gender, @FormDataParam("phone") String phone,
+			@FormDataParam("file") File photoObject,@FormDataParam("file") FormDataContentDisposition contentDispositionHeader){		
 
+		PreparedStatement prepStmt = null;			
+		Connection conn=null;
+		
+		String imagePath = new String();
+		JSONObject jsonObject = new JSONObject();	
+		System.out.println("in userupdate");
+		System.out.println("in user update userName - "+userId);
+		try{
+			AWSS3BucketHandling awss3BucketHandling=new AWSS3BucketHandling();
+			imagePath =awss3BucketHandling.addS3BucketObjects(photoObject, contentDispositionHeader);
+			
+			if(imagePath!=null) {
+				System.out.println("imagePath:  "+imagePath);
+			}else{
+				jsonObject.put("message", "Image upload failed, try again later!");
+			}
+						
+			jsonObject.put("responseFlag", "fail");
+
+			DBConnection dbConnection =new DBConnection();
+			conn=dbConnection.getConnection();			
+			conn.setAutoCommit(false);
+			String query = "UPDATE users SET first_name=?,last_name=?,email=?,bio=?,"
+					+ "website_url=?,gender=?,phone_number=?,profile_pic_path=? WHERE user_id = ?;";
+			prepStmt = conn.prepareStatement(query);
+			prepStmt.setString(1, firstName);
+			prepStmt.setString(2, lastName);
+			prepStmt.setString(3, email);
+			prepStmt.setString(4, bio);
+			prepStmt.setString(5, website);
+			prepStmt.setString(6, gender);
+			prepStmt.setString(7, phone);
+			prepStmt.setString(8, imagePath);
+			prepStmt.setString(9, userId);
+			
+			if(prepStmt.executeUpdate()==1){
+				jsonObject.put("responseFlag", "success");
+				conn.commit();						
+			}
+
+		}catch(SQLException se){
+			//Handle errors for JDBC
+			se.printStackTrace();
+		}catch(Exception e){
+			//Handle errors for Class.forName
+			e.printStackTrace();
+		}finally{
+			//finally block used to close resources
+			try{
+				if(prepStmt!=null)
+					prepStmt.close();	
+			}catch(SQLException se2){
+			}// nothing we can do
+			try{
+				if(conn!=null)
+					conn.close();
+			}catch(SQLException se){
+				se.printStackTrace();
+			}//end finally try
+		}
+		System.out.println(jsonObject.toString());
+		return Response.status(200).entity(jsonObject.toString()).build();		
+	} 
+	
 	@POST
 	@Consumes("application/x-www-form-urlencoded")
 	@Path("user/social")
@@ -803,6 +888,65 @@ public class PixShareServices {
 		System.out.println(jsonObject.toString());
 		return Response.status(200).entity(jsonObject.toString()).build();		
 	}
+	
+	@GET
+	@Consumes("application/x-www-form-urlencoded")
+	@Path("user/friend/request")
+	public Response getFriendRequestList(@QueryParam("userId") String userId){		
+
+		PreparedStatement prepStmt = null;			
+		Connection conn=null;
+		JSONObject jsonObject = new JSONObject();		
+		JSONArray jsonArray = new JSONArray();
+		JSONArray jsonArray1 = new JSONArray();
+		System.out.println("in getFriendRequestList");
+		try{
+			System.out.println("in getFriendRequestList with userId - "+userId);		
+
+			jsonObject.put("responseFlag", "fail");
+
+			DBConnection dbConnection =new DBConnection();
+			conn=dbConnection.getConnection();	
+
+			String query = "SELECT u.user_id,u.first_name,u.last_name,u.profile_pic_path FROM users u "
+					+ "WHERE u.user_id IN (SELECT user_id FROM friends WHERE friend_id = ? AND approved = ?)";
+			prepStmt = conn.prepareStatement(query);
+			prepStmt.setString(1, userId);
+			prepStmt.setInt(2, 0);	//for non-approved requests		
+			ResultSet rs = prepStmt.executeQuery();
+
+			while(rs.next()){
+				jsonArray = new JSONArray();
+				jsonArray.put(rs.getString("user_id"));
+				jsonArray.put(rs.getString("first_name")+" "+rs.getString("last_name"));
+				jsonArray.put(rs.getString("profile_pic_path"));				
+				jsonArray1.put(jsonArray);
+			}
+			jsonObject.put("responseFlag", "success");
+			jsonObject.put("friendList", jsonArray1);
+		}catch(SQLException se){
+			//Handle errors for JDBC
+			se.printStackTrace();
+		}catch(Exception e){
+			//Handle errors for Class.forName
+			e.printStackTrace();
+		}finally{
+			//finally block used to close resources
+			try{
+				if(prepStmt!=null)
+					prepStmt.close();	
+			}catch(SQLException se2){
+			}// nothing we can do
+			try{
+				if(conn!=null)
+					conn.close();
+			}catch(SQLException se){
+				se.printStackTrace();
+			}//end finally try
+		}
+		System.out.println(jsonObject.toString());
+		return Response.status(200).entity(jsonObject.toString()).build();		
+	}
 
 	@GET
 	@Consumes("application/x-www-form-urlencoded")
@@ -1152,9 +1296,8 @@ public class PixShareServices {
 	@Path("group")
 	public Response getGroups(@QueryParam("userId") String userId){		
 
-		PreparedStatement prepStmt = null, prepStmt1 = null;			
+		PreparedStatement prepStmt = null;			
 		Connection conn=null;
-		ResultSet rs1 = null;
 		JSONObject jsonObject = new JSONObject();	
 		JSONArray jsonArray = new JSONArray();
 		JSONArray jsonArray1 = new JSONArray();
@@ -1168,22 +1311,14 @@ public class PixShareServices {
 			DBConnection dbConnection =new DBConnection();
 			conn=dbConnection.getConnection();	
 
-			String query = "SELECT group_id,user_id FROM users_groups WHERE user_id = ?";
+			String query = "select group_id,group_name from groups where group_owner_id = ?";
 			prepStmt = conn.prepareStatement(query);
 			prepStmt.setInt(1, Integer.parseInt(userId));
 			ResultSet rs = prepStmt.executeQuery();
 			while(rs.next()){
 				jsonArray = new JSONArray();
-				jsonArray.put(rs.getString("group_id"));				
-				// get other group details from groups table
-				query = "SELECT group_name, group_owner_id FROM groups WHERE group_id = ?";
-				prepStmt1 = conn.prepareStatement(query);
-				prepStmt1.setInt(1, rs.getInt("group_id"));
-				rs1 = prepStmt1.executeQuery();
-				while(rs1.next()){
-					jsonArray.put(rs1.getString("group_name"));
-					jsonArray.put(rs1.getInt("group_owner_id"));
-				}
+				jsonArray.put(rs.getString("group_id"));			
+				jsonArray.put(rs.getString("group_name"));				
 				jsonArray1.put(jsonArray);
 			}
 			jsonObject.put("userGroups", jsonArray1);
@@ -1326,7 +1461,7 @@ public class PixShareServices {
 				jsonArray.put(rs.getString("group_id"));
 				jsonArray.put(rs.getString("user_id"));
 				jsonArray.put(rs.getString("first_name")+" "+rs.getString("last_name"));
-				jsonArray.put(rs.getInt("profile_pic_path"));
+				jsonArray.put(rs.getString("profile_pic_path"));
 				jsonArray1.put(jsonArray);
 			}
 			jsonObject.put("userGroupMembers", jsonArray1);
